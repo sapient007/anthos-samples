@@ -13,3 +13,4 @@ instance_count   = {
 #  count = 1,
 #  type = "nvidia-tesla-k80"
 #}
+gce_default_sa  = "<THE_DEFAULT_SERVICE_ACCOUNT_FOR_GCE>"
