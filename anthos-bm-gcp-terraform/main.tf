@@ -71,6 +71,66 @@ module "enable_google_apis_secondary" {
   disable_services_on_destroy = false
 }
 
+resource "google_project_iam_binding" "grant_sa_user_access_to_default_sa" {
+  project = var.project_id
+  role    = "roles/iam.serviceAccountUser"
+
+  members = [
+    "serviceAccount:${var.gce_default_sa}",
+  ]
+}
+resource "google_project_iam_binding" "grant_sa_key_access_to_default_sa" {
+  project = var.project_id
+  role    = "roles/iam.serviceAccountKeyAdmin"
+
+  members = [
+    "serviceAccount:${var.gce_default_sa}",
+  ]
+}
+
+resource "google_project_iam_binding" "grant_compute_admin_access_to_default_sa" {
+  project = var.project_id
+  role    = "roles/compute.admin"
+
+  members = [
+    "serviceAccount:${var.gce_default_sa}",
+  ]
+}
+
+resource "google_compute_firewall" "default-allow-internal" {
+  name    = "default-allow-internal"
+  network = var.network
+
+  allow {
+    protocol = "icmp"
+  }
+
+  allow {
+    protocol = "tcp"
+    ports    = ["0-65535"]
+  }
+
+  allow {
+    protocol = "udp"
+    ports    = ["0-65535"]
+  }
+
+  source_ranges = ["10.128.0.0/9"]
+}
+
+
+resource "google_compute_firewall" "default-allow-rdp" {
+  name    = "default-allow-rdp"
+  network = var.network
+
+  allow {
+    protocol = "tcp"
+    ports    = ["3389"]
+  }
+
+  source_ranges = ["0.0.0.0/0"]
+}
+
 module "create_service_accounts" {
   source  = "terraform-google-modules/service-accounts/google"
   version = "~> 4.0"

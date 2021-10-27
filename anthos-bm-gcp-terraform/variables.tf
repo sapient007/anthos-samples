@@ -177,3 +177,8 @@ variable "instance_count" {
   }
 }
 # [END anthos_bm_node_prefix]
+
+variable "gce_default_sa" {
+  description = "The default service account associated to Compute Engine VMs"
+  type        = string
+}
