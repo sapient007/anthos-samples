@@ -43,6 +43,7 @@ function __main__ () {
   __setup_vxlan__
   __disable_apparmour__
   __setup_admin_host__
+  __enable_root_ssh__
 
   echo "[+] Successfully completed initialization of host $HOSTNAME"
 }
@@ -51,9 +52,8 @@ function __main__ () {
 # Install some basic dependencies required for the setup
 ##############################################################################
 function __install_deps__ () {
-  apt-get -qq update
-  apt-get -qq install -y jq
-
+  # yum update --exclude=kernel* -y -q  <commenting out to avoid upgrade to 8.5>
+  yum install -q -y jq
   __check_exit_status__ $? \
     "[+] Successfully installed dependencies" \
     "[-] Failed to install dependencies. Check for failures on [apt-get] in ~/$LOG_FILE"
@@ -111,22 +111,37 @@ function __update_bridge_entries__ () {
 
 ##############################################################################
 # Disable apparmour service on the host. Anthos clusters on bare metal does
-# not support apparmor
+# not support firewalld
 ##############################################################################
 function __disable_apparmour__ () {
-  echo "Stopping apparmor system service"
-  systemctl stop apparmor.service
+  echo "stopping firewalld"
+  systemctl -q stop firewalld
   __check_exit_status__ $? \
-    "[+] Successfully stopped apparmor service" \
-    "[-] Failed to stop apparmor service. Check for failures on [systemctl stop apparmor.service] in ~/$LOG_FILE"
+    "[+] Successfully stopped firewalld service" \
+    "[-] Failed to stop firewalld service. Check for failures on [systemctl stop firewalld] in ~/$LOG_FILE"
 
-  systemctl disable apparmor.service
+  systemctl -q disable firewalld
   __check_exit_status__ $? \
-    "[+] Successfully disabled apparmor service" \
-    "[-] Failed to disable apparmor service. Check for failures on [systemctl disable apparmor.service] in ~/$LOG_FILE"
+    "[+] Successfully disabled firewalld service" \
+    "[-] Failed to disable firewalld service. Check for failures on [systemctl disable firewalld] in ~/$LOG_FILE"
 
   __print_separator__
 }
+
+
+#############################################################################
+# Enable root ssh for all the vms
+# Default for RHEL is to disable root ssh 
+############################################################################
+function __enable_root_ssh__ () {
+  echo "enabling root ssh to all vms"
+  sed -i 's/PermitRootLogin no/PermitRootLogin yes/g' /etc/ssh/sshd_config
+  systemctl restart sshd
+  __check_exit_status__ $? \
+    "[+] Successfully enabled root ssh service" \
+    "[-] Failed to enable root ssh service. Check for failures in ~/$LOG_FILE"
+}
+
 
 ##############################################################################
 # Configure the admin host with additional tools required to provision and
@@ -193,8 +208,24 @@ function __setup_bmctl__ () {
 function __setup_docker__ () {
   cd ~ || return
   echo "Installing docker"
-  curl -fsSL https://get.docker.com -o get-docker.sh
-  sh get-docker.sh
+  dnf -q remove docker \
+    docker-client \
+    docker-client-latest \
+    docker-common \
+    docker-latest \
+    docker-latest-logrotate \
+    docker-logrotate \
+    docker-engine
+  
+  dnf -q remove podman-manpages
+
+  dnf -q install -y yum-utils
+  yum-config-manager \
+    --add-repo \
+    https://download.docker.com/linux/centos/docker-ce.repo
+  dnf -q install -y --allowerasing docker-ce docker-ce-cli containerd.io
+  systemctl -q start docker
+
   __check_exit_status__ $? \
     "[+] Successfully installed docker" \
     "[-] Failed to install docker. Check for failures on downloading or execution of [get-docker.sh] in ~/$LOG_FILE"
